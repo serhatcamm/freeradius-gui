@@ -59,6 +59,58 @@ if getent group ssl-cert >/dev/null; then
     log "  added $SERVICE_USER to ssl-cert so freeradius -XC can read the EAP key"
 fi
 
+# -------------------------------------------------------------------- groups
+# FreeRADIUS ignores mods-config/files/groups unless the `files` module has an
+# active `groupfile` directive. Debian ships that line commented out (or absent
+# entirely), so without this the panel's Groups page would accept edits that
+# never reach authentication - the worst kind of failure, because it looks like
+# it worked. Wire it here, in the installer, rather than exposing module config
+# to the web UI: the UI keeps a data-file-only blast radius.
+#
+# Both steps are idempotent so re-running the installer is safe.
+log "Enabling RADIUS group support"
+FILES_MODULE="$RADDB/mods-available/files"
+GROUPS_FILE="$RADDB/mods-config/files/groups"
+
+if [ ! -f "$FILES_MODULE" ]; then
+    log "  WARNING: $FILES_MODULE not found; skipping groupfile wiring"
+elif grep -Eq '^[[:space:]]*groupfile[[:space:]]*=' "$FILES_MODULE"; then
+    log "  groupfile already enabled"
+else
+    # Remove any existing directive first (active or commented) and insert
+    # exactly one. Delete-then-insert is idempotent by construction, so a
+    # re-run cannot leave FreeRADIUS with two groupfile directives.
+    sed -i '/^[[:space:]]*#\?[[:space:]]*groupfile[[:space:]]*=/d' "$FILES_MODULE"
+    # Insert *after* the moddir assignment. FreeRADIUS expands ${moddir} while
+    # parsing the section, so inserting before it could expand to empty and
+    # silently point groupfile at /groups.
+    sed -i '/^[[:space:]]*moddir[[:space:]]*=/a\\tgroupfile = ${moddir}/groups' "$FILES_MODULE"
+    # Verify rather than assume.
+    if [ "$(grep -cE '^[[:space:]]*groupfile[[:space:]]*=' "$FILES_MODULE")" = "1" ]; then
+        log "  added 'groupfile = \${moddir}/groups' to the [files] module"
+    else
+        log "  WARNING: groupfile is not set up correctly in $FILES_MODULE"
+        log "           expected exactly one 'groupfile = \${moddir}/groups' line"
+    fi
+fi
+
+if [ ! -f "$GROUPS_FILE" ]; then
+    cat > "$GROUPS_FILE" <<'GROUPS'
+# RADIUS groups.
+#
+# One group per line: <name> followed by comma-separated attributes.
+# "DEFAULT" applies to any request whose Group matches no entry above it.
+#
+# staff    Reply-Message = "welcome"
+GROUPS
+    # 0640 root:freerad, matching the other FreeRADIUS data files.
+    chown root:freerad "$GROUPS_FILE" 2>/dev/null || chown root:root "$GROUPS_FILE"
+    chmod 0640 "$GROUPS_FILE"
+    log "  created $GROUPS_FILE"
+else
+    log "  $GROUPS_FILE already exists; left untouched"
+fi
+
 # ------------------------------------------------------------------ settings
 # Single source of truth for both the service and the CLI.
 #

@@ -65,6 +65,24 @@ def validate_privilege(level: int | None) -> int | None:
     return level
 
 
+def validate_group(group: str) -> str:
+    """Validate a ``Group = <name>`` value for a user entry.
+
+    The same shape the groups service accepts, because the value is matched
+    against a group name. An empty string is allowed and means "no group"; the
+    user service turns it into a removal rather than writing a blank line.
+    """
+    from .groups import GroupValidationError, validate_group_name
+
+    group = (group or "").strip()
+    if not group:
+        return ""
+    try:
+        return validate_group_name(group)
+    except GroupValidationError as exc:
+        raise UserValidationError(str(exc)) from exc
+
+
 class UserService:
     def __init__(self, tx: ConfigTransaction | None = None) -> None:
         self.tx = tx or ConfigTransaction()
@@ -109,12 +127,14 @@ class UserService:
         administrator: str,
         source_ip: str | None = None,
         enabled: bool = True,
+        group: str = "",
         db=None,
     ) -> dict:
         username = validate_username(username)
         privilege = validate_privilege(cisco_privilege)
         if not password:
             raise UserValidationError("Password is required")
+        group = validate_group(group)
 
         doc = parse_users(self._read())
         if doc.unique_find(username) is not None:
@@ -124,6 +144,8 @@ class UserService:
         entry.set_password(password)
         if privilege is not None:
             entry.set_cisco_privilege(privilege)
+        if group:
+            entry.set_group(group)
         entry.enabled = enabled
         doc.upsert(entry)
 
@@ -143,7 +165,7 @@ class UserService:
             object_type="user",
             object_id=username,
             source_ip=source_ip,
-            detail={"cisco_privilege": privilege, "enabled": enabled},
+            detail={"cisco_privilege": privilege, "enabled": enabled, "group": group or None},
         )
         return self.get_user(username) or {}
 
@@ -154,6 +176,7 @@ class UserService:
         password: str | None = None,
         cisco_privilege: int | None = None,
         clear_cisco: bool = False,
+        group: str | None = None,
         administrator: str,
         source_ip: str | None = None,
         db=None,
@@ -164,6 +187,8 @@ class UserService:
         if not matches:
             raise UserValidationError(f"User {username!r} not found")
 
+        group = validate_group(group) if group is not None else None
+
         changed: dict[str, object] = {}
         if password:
             changed["password"] = "changed"
@@ -171,6 +196,8 @@ class UserService:
             changed["cisco_privilege"] = None
         elif privilege is not None:
             changed["cisco_privilege"] = privilege
+        if group is not None:
+            changed["group"] = group or None
 
         if not changed:
             raise UserValidationError("No changes requested")
@@ -185,6 +212,8 @@ class UserService:
                 entry.clear_cisco()
             elif privilege is not None:
                 entry.set_cisco_privilege(privilege)
+            if group is not None:
+                entry.set_group(group)
 
         changed["entries_changed"] = len(matches)
         if len(matches) > 1:
@@ -312,6 +341,7 @@ def _to_dict(entry: UserEntry) -> dict:
         "status": "active" if entry.enabled else "disabled",
         "cisco_privilege": entry.cisco_privilege,
         "cisco_avpairs": entry.cisco_avpairs,
+        "group": entry.group,
         "has_password": entry.has_password,
         "rejects": entry.rejects,
         "line_number": entry.line_number,

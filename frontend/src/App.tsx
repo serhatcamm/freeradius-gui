@@ -5,6 +5,7 @@ import { AccountsPage } from './pages/AccountsPage'
 import { AuditPage } from './pages/AuditPage'
 import { BackupsPage } from './pages/BackupsPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { GroupsPage } from './pages/GroupsPage'
 import { LogInPage } from './pages/LogInPage'
 import { LogsPage } from './pages/LogsPage'
 import { ServicePage } from './pages/ServicePage'
@@ -15,6 +16,7 @@ const NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/users', label: 'Users' },
   { to: '/clients', label: 'Clients' },
+  { to: '/groups', label: 'Groups' },
   { to: '/logs', label: 'Logs' },
   { to: '/service', label: 'Service' },
   { to: '/backups', label: 'Backups' },
@@ -50,8 +52,9 @@ export default function App() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/users" element={<AccountsPage kind="users" />} />
-            <Route path="/clients" element={<AccountsPage kind="clients" />} />
-            <Route path="/logs" element={<LogsPage />} />
+<Route path="/clients" element={<AccountsPage kind="clients" />} />
+    <Route path="/groups" element={<GroupsPage />} />
+    <Route path="/logs" element={<LogsPage />} />
             <Route path="/service" element={<ServicePage />} />
             <Route path="/backups" element={<BackupsPage />} />
             <Route path="/audit" element={<AuditPage />} />

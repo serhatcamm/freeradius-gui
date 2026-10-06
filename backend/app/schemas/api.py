@@ -39,6 +39,8 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
     cisco_privilege: int | None = 15
     enabled: bool = True
+    #: Optional group to attach via "Group = name".
+    group: str = Field(default="", max_length=64)
 
     @field_validator("username")
     @classmethod
@@ -55,6 +57,8 @@ class UserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=1, max_length=1024)
     cisco_privilege: int | None = None
     clear_cisco: bool = False
+    #: Group name to attach, or "" to remove the user's group.
+    group: str | None = Field(default=None, max_length=64)
 
     @field_validator("cisco_privilege")
     @classmethod
@@ -71,6 +75,7 @@ class UserOut(BaseModel):
     status: str
     cisco_privilege: int | None
     cisco_avpairs: list[str]
+    group: str = ""
     has_password: bool
     rejects: bool
     line_number: int
@@ -129,6 +134,38 @@ class ClientOut(BaseModel):
     require_message_authenticator: bool
     line_number: int
     generated_secret: str | None = None
+
+
+# -- groups -------------------------------------------------------------
+class GroupAttribute(BaseModel):
+    """One attribute inside a group definition."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=63)
+    value: str = Field(min_length=1, max_length=253)
+    reply: bool = False
+
+
+class GroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    attributes: list[GroupAttribute] = Field(default_factory=list, max_length=64)
+
+
+class GroupUpdate(BaseModel):
+    attributes: list[GroupAttribute] = Field(default_factory=list, max_length=64)
+
+
+class GroupOut(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    name: str
+    is_default: bool
+    line_number: int
+    comment: str
+    attributes: list[dict]
+    #: Present on GET /api/groups/{name}; members set "Group = name" in authorize.
+    members: list[str] = Field(default_factory=list)
 
 
 class SecretResponse(BaseModel):

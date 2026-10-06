@@ -82,8 +82,52 @@ async def build_dashboard() -> dict:
         "validation_summary": validation.summary,
         "logging": capability,
         "accounting": accounting.detect_configuration(),
+        "groups": _group_summary(),
         "security_findings": security_findings,
         "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _group_summary() -> dict:
+    """Group counts plus whether FreeRADIUS will actually read the file.
+
+    Reported as ``available: false`` with a reason when the ``groupfile``
+    directive is missing, matching how the other optional sources behave
+    rather than showing a group count that has no effect on authentication.
+    """
+    from .groups import GroupService, groupfile_status
+
+    try:
+        groups = GroupService().list_groups()
+    except Exception:  # noqa: BLE001 - a dashboard must not fail on one source
+        logger.exception("group summary unavailable")
+        return {
+            "available": False,
+            "reason": "The groups file could not be read.",
+            "enabled": False,
+            "count": 0,
+            "members": 0,
+        }
+
+    status = groupfile_status()
+    if not status.get("enabled"):
+        return {
+            "available": False,
+            "reason": (
+                "The files module has no active groupfile directive, so "
+                "FreeRADIUS ignores this file. Run the installer to enable it."
+            ),
+            "enabled": False,
+            "count": len(groups),
+            "members": 0,
+        }
+
+    service = GroupService()
+    return {
+        "available": True,
+        "enabled": True,
+        "count": len(groups),
+        "members": sum(len(service.members(g["name"])) for g in groups),
     }
 
 

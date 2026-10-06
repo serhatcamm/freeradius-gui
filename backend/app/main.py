@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .api import auth as auth_router
 from .api import clients as clients_router
+from .api import groups as groups_router
 from .api import deps
 from .api import logs as logs_router
 from .api import panel as panel_router
@@ -136,6 +137,7 @@ async def api_health() -> dict:
 app.include_router(auth_router.router)
 app.include_router(users_router.router)
 app.include_router(clients_router.router)
+app.include_router(groups_router.router)
 app.include_router(logs_router.router)
 app.include_router(panel_router.router)
 

@@ -7,6 +7,7 @@ oversized payloads must all be refused.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -28,17 +29,30 @@ def wrapper(tmp_path: Path) -> Path:
 
 
 def make_wrapper(tmp_path: Path, allowed: list[str]) -> Path:
+    """Copy the wrapper with ``allowed`` swapped for the supplied paths.
+
+    The real ALLOWED tuple is replaced by regex rather than an exact string
+    match: adding an entry to the production allow-list must not silently stop
+    these tests from replacing it, which is exactly what happened when the
+    groups path was added and the literal match went stale.
+    """
     src = WRAPPER_SRC.read_text(encoding="utf-8")
     listing = "\n".join(f'    "{p}",' for p in allowed)
-    src = src.replace(
-        'ALLOWED = (\n    "/etc/freeradius/3.0/mods-config/files/authorize",\n'
-        '    "/etc/freeradius/3.0/clients.conf",\n'
-        '    "/etc/freeradius/3.0/sites-available/default",\n'
-        '    "/etc/freeradius/3.0/mods-available/linelog",\n)',
+
+    replaced, count = re.subn(
+        r"ALLOWED = \([^)]*\)",
         f"ALLOWED = (\n{listing}\n)",
+        src,
+        count=1,
     )
+    if count != 1:
+        raise AssertionError(
+            "could not find the ALLOWED tuple in the wrapper; the source "
+            "structure changed and this helper must be updated"
+        )
+
     target = tmp_path / "frw-write"
-    target.write_text(src, encoding="utf-8")
+    target.write_text(replaced, encoding="utf-8")
     target.chmod(0o755)
     return target
 

@@ -33,6 +33,20 @@ export function AccountsPage({ kind }: { kind: Kind }) {
   const { data, error, loading, reload } = useAsync(loader, [isUsers])
   const { run, pending, error: actionError } = useAction()
 
+  // The user editor offers a group picker, so the page needs the names. A
+  // failure here must not break the users table, hence the silent fallback.
+  const { data: groupStatus } = useAsync(
+    useMemo(() => (isUsers ? () => api.groups() : () => Promise.resolve(null)), [isUsers]),
+    [isUsers],
+  )
+  const groupNames = useMemo(
+    () =>
+      (groupStatus?.groups ?? [])
+        .filter((group) => !group.is_default)
+        .map((group) => group.name),
+    [groupStatus],
+  )
+
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<User | Client | null>(null)
   const [deleting, setDeleting] = useState<User | Client | null>(null)
@@ -166,6 +180,7 @@ export function AccountsPage({ kind }: { kind: Kind }) {
       {createOpen ? (
         <AccountDialog
           kind={kind}
+          groupNames={groupNames}
           onClose={() => setCreateOpen(false)}
           onSaved={(text) => {
             setCreateOpen(false)
@@ -179,6 +194,7 @@ export function AccountsPage({ kind }: { kind: Kind }) {
         <AccountDialog
           kind={kind}
           existing={editing}
+          groupNames={groupNames}
           onClose={() => setEditing(null)}
           onSaved={(text) => {
             setEditing(null)
@@ -224,6 +240,7 @@ function UserHeader() {
       <th className="th">Auth method</th>
       <th className="th">Password</th>
       <th className="th">Privilege</th>
+      <th className="th">Group</th>
       <th className="th">Last auth</th>
       <th className="th text-right">Actions</th>
     </tr>
@@ -324,6 +341,7 @@ function UserRow({
       <td className="td">{user.auth_method}</td>
       <td className="td">{user.has_password ? 'set' : <span className="text-slate-500">none</span>}</td>
       <td className="td">{user.cisco_privilege ?? '—'}</td>
+      <td className="td">{user.group || <span className="text-slate-500">—</span>}</td>
       <td className="td text-slate-400">{user.last_authentication ?? '—'}</td>
       <ActionsCell
         canOperate={canOperate}
@@ -423,11 +441,13 @@ function ClientRow({
 function AccountDialog({
   kind,
   existing,
+  groupNames,
   onClose,
   onSaved,
 }: {
   kind: Kind
   existing?: User | Client
+  groupNames: string[]
   onClose: () => void
   onSaved: (message: string) => void
 }) {
@@ -442,6 +462,7 @@ function AccountDialog({
   const [password, setPassword] = useState('')
   const [privilege, setPrivilege] = useState(String(user?.cisco_privilege ?? 1))
   const [authMethod, setAuthMethod] = useState(user?.auth_method ?? 'pap')
+  const [group, setGroup] = useState(user?.group ?? '')
 
   const [name, setName] = useState(client?.name ?? '')
   const [address, setAddress] = useState(client?.address ?? '')
@@ -457,9 +478,12 @@ function AccountDialog({
             api.updateUser(username, {
               cisco_privilege: Number(privilege) || 1,
               auth_method: authMethod,
+              // Only send the group when it changed: the API treats a missing
+              // value as "leave as is" and "" as "remove".
+              ...(group !== (user?.group ?? '') ? { group } : {}),
             }),
           )
-        : await run(() => api.createUser({ username, password }))
+        : await run(() => api.createUser({ username, password, ...(group ? { group } : {}) }))
       if (result) onSaved(editing ? `Updated ${username}.` : `Created ${username}.`)
       return
     }
@@ -578,6 +602,35 @@ function AccountDialog({
                   ))}
                 </select>
               </div>
+            </div>
+            <div>
+              <label className="label" htmlFor="user-group">
+                Group
+              </label>
+              <select
+                id="user-group"
+                className="input"
+                value={group}
+                onChange={(event) => setGroup(event.target.value)}
+              >
+                <option value="">No group</option>
+                {groupNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              {groupNames.length === 0 ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  No groups defined yet. Add one on the Groups page to share
+                  reply attributes across users.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-500">
+                  Adds a <code>Group = {group || 'name'}</code> line to the user,
+                  so the group&apos;s reply attributes apply to every login.
+                </p>
+              )}
             </div>
           </>
         ) : (

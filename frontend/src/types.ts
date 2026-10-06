@@ -22,12 +22,42 @@ export interface User {
   status: string
   cisco_privilege: number | null
   cisco_avpairs: string[]
+  /** The group this user references with ``Group = name``, or "" for none. */
+  group: string
   /** The API never returns the password itself. */
   has_password: boolean
   rejects: boolean
   line_number: number
   last_authentication: string | null
   duplicate_entries: number | null
+}
+
+export interface GroupAttribute {
+  key: string
+  value: string
+  /** Written with an explicit ``reply:`` prefix. */
+  reply: boolean
+}
+
+export interface Group {
+  name: string
+  is_default: boolean
+  line_number: number
+  comment: string
+  attributes: GroupAttribute[]
+  /** Users whose authorize entry sets ``Group = <name>``. */
+  members?: string[]
+}
+
+export interface GroupsStatus {
+  /** False when the files module has no active groupfile directive. */
+  enabled: boolean
+  module_file: string
+  groups_file: string
+  groups_file_exists: boolean
+  directive: string | null
+  error?: string
+  groups: Group[]
 }
 
 export interface Client {
@@ -110,6 +140,14 @@ export interface Dashboard {
     listening_ports?: ListeningSocket[]
   }
   counts?: DashboardCounts
+  /** Group counts plus whether the files module will read the groupfile. */
+  groups?: {
+    available: boolean
+    reason?: string
+    enabled: boolean
+    count: number
+    members: number
+  }
   validation?: ValidationResult
   validation_summary?: string
   generated_at?: string

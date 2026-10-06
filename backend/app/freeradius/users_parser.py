@@ -178,6 +178,31 @@ class UserEntry:
         self.reply = [a for a in self.reply if a.key != "Cisco-AVPair"]
         self.dirty = True
 
+    @property
+    def group(self) -> str:
+        """The ``Group = name`` this entry declares, or "" when it has none.
+
+        The assignment is written on a continuation line, which the parser
+        files under ``reply`` alongside Cisco-AVPair, so all three lists are
+        checked rather than assuming one.
+        """
+        for assignment in (*self.attributes, *self.conditions, *self.reply):
+            if assignment.key == "Group":
+                return assignment.unquoted_value
+        return ""
+
+    def set_group(self, group: str) -> None:
+        """Set (or clear) ``Group = name``, replacing any existing value.
+
+        Lives on the reply list because that is where the panel already writes
+        per-user attributes such as Cisco-AVPair, and it is what the parser
+        reads back for group membership.
+        """
+        self.reply = [a for a in self.reply if a.key != "Group"]
+        if group:
+            self.reply.append(Assignment("Group", "=", group))
+        self.dirty = True
+
     # -- serialisation ---------------------------------------------------
     def render(self, indent: str = "\t") -> str:
         # Untouched entries must be emitted byte-for-byte.

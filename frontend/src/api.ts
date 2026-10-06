@@ -14,6 +14,8 @@ import type {
   BackupList,
   Client,
   Dashboard,
+  Group,
+  GroupsStatus,
   LogCapability,
   LogEvent,
   LoginResponse,
@@ -136,7 +138,7 @@ export const api = {
 
   // -- users -------------------------------------------------------------
   users: () => request<User[]>('/api/users'),
-  createUser: (body: { username: string; password: string }) =>
+  createUser: (body: { username: string; password: string; group?: string }) =>
     request<User>('/api/users', { method: 'POST', body: JSON.stringify(body) }),
   updateUser: (username: string, body: Record<string, unknown>) =>
     request<User>(`/api/users/${encodeURIComponent(username)}`, {
@@ -175,6 +177,21 @@ export const api = {
     request<Client>(`/api/clients/${encodeURIComponent(name)}/disable`, { method: 'POST' }),
   deleteClient: (name: string) =>
     request<{ ok: boolean }>(`/api/clients/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+
+  // -- groups -----------------------------------------------------------
+  groups: () => request<GroupsStatus>('/api/groups/status'),
+  createGroup: (body: Record<string, unknown>) =>
+    request<Group>('/api/groups', { method: 'POST', body: JSON.stringify(body) }),
+  updateGroup: (name: string, body: Record<string, unknown>) =>
+    request<Group>(`/api/groups/${encodeURIComponent(name)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteGroup: (name: string) =>
+    request<{ ok: boolean; name: string; entries_removed: number }>(
+      `/api/groups/${encodeURIComponent(name)}`,
+      { method: 'DELETE' },
+    ),
 
   // -- logs --------------------------------------------------------------
   logs: (params: {
@@ -236,6 +253,9 @@ export type {
   Backup,
   Client,
   Dashboard,
+  Group,
+  GroupAttribute,
+  GroupsStatus,
   LogCapability,
   LogEvent,
   LoginResponse,

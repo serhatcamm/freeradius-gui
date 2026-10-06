@@ -28,6 +28,12 @@ ACCOUNTING_FILE = _env_path(
     "FRW_ACCOUNTING_FILE", str(RADDB_DIR / "mods-config" / "files" / "accounting")
 )
 
+#: RADIUS groups. FreeRADIUS only reads this when the ``files`` module has an
+#: active ``groupfile`` directive (see app/services/groups.py).
+GROUPS_FILE = _env_path(
+    "FRW_GROUPS_FILE", str(RADDB_DIR / "mods-config" / "files" / "groups")
+)
+
 #: Site definition that holds the virtual servers.
 SITES_AVAILABLE = RADDB_DIR / "sites-available"
 
@@ -57,7 +63,15 @@ MANAGED_FILES = {
     "users": USERS_FILE,
     "clients": CLIENTS_FILE,
     "accounting": ACCOUNTING_FILE,
+    "groups": GROUPS_FILE,
 }
+
+#: The subset of ``MANAGED_FILES`` the panel is allowed to rewrite. Every path
+#: here must appear in the privileged writer's allow-list, which is the real
+#: enforcement point; tests/test_write_allowlist.py keeps the two in step.
+#: "accounting" is deliberately absent: it is reported in the UI but never
+#: edited, so the privileged writer has no reason to accept it.
+WRITABLE_KINDS = ("users", "clients", "groups")
 
 
 def managed_path(kind: str) -> Path:

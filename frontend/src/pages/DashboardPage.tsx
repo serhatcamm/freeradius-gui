@@ -12,6 +12,7 @@ export function DashboardPage() {
 
   const counts = data.counts ?? {}
   const disabledUsers = Number(counts.users_disabled ?? counts.disabled_users ?? 0)
+  const groups = data.groups
 
   return (
     <div className="space-y-6">
@@ -42,6 +43,17 @@ export function DashboardPage() {
           label="Uptime"
           value={formatDuration(data.server?.uptime_seconds ?? undefined)}
           hint={data.server?.hostname}
+        />
+        <StatTile
+          label="Groups"
+          value={groups?.count ?? 0}
+          hint={
+            !groups?.available
+              ? (groups?.reason ?? 'groupfile not read')
+              : groups.enabled
+                ? `${groups.members} member assignment${groups.members === 1 ? '' : 's'}`
+                : 'groupfile not active'
+          }
         />
       </div>
 
