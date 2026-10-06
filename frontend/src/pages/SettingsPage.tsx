@@ -23,18 +23,41 @@ export function SettingsPage() {
           <ErrorBanner message={settings.error} onRetry={() => void settings.reload()} />
         ) : settings.data ? (
           <dl className="mt-3 space-y-2 text-sm">
-            <Row label="Version" value={String(settings.data['app_version'] ?? '—')} />
-            <Row label="Environment" value={String(settings.data['environment'] ?? '—')} />
-            <Row label="Radius directory" value={String(settings.data['radius_dir'] ?? '—')} />
-            <Row label="Backup directory" value={String(settings.data['backup_dir'] ?? '—')} />
-            <Row label="Log window" value={String(settings.data['log_window_hours'] ?? '—')} />
+            <Row label="Environment" value={settings.data.environment ?? '—'} />
+            <Row label="Radius directory" value={settings.data.raddb_dir ?? '—'} />
+            <Row label="Backup directory" value={settings.data.backup_dir ?? '—'} />
+            <Row label="Log directory" value={settings.data.log_dir ?? '—'} />
+            <Row label="Database" value={settings.data.database ?? '—'} />
             <Row
               label="Session lifetime"
-              value={`${String(settings.data['session_minutes'] ?? '—')} minutes`}
+              value={
+                settings.data.session_timeout_seconds != null
+                  ? `${Math.round(settings.data.session_timeout_seconds / 60)} minutes`
+                  : '—'
+              }
             />
             <Row
+              label="Idle timeout"
+              value={
+                settings.data.idle_timeout_seconds != null
+                  ? `${Math.round(settings.data.idle_timeout_seconds / 60)} minutes`
+                  : '—'
+              }
+            />
+            <Row
+              label="Secure cookies"
+              value={settings.data.cookie_secure === undefined ? '—' : String(settings.data.cookie_secure)}
+            />
+            {/* managed_files is a name -> path mapping, so join the values. */}
+            <Row
               label="Managed files"
-              value={(settings.data['managed_files'] as string[] | undefined)?.join(', ') ?? '—'}
+              value={
+                settings.data.managed_files
+                  ? Object.entries(settings.data.managed_files)
+                      .map(([name, path]) => `${name}: ${path}`)
+                      .join(', ')
+                  : '—'
+              }
             />
           </dl>
         ) : null}

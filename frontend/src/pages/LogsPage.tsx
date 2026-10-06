@@ -288,12 +288,18 @@ function ResultBadge({ result, severity }: { result?: string | null; severity: s
 function RadiusTestCard({ canOperate }: { canOperate: boolean }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [client, setClient] = useState('')
   const { run, pending, error } = useAction()
   const [result, setResult] = useState<Awaited<ReturnType<typeof api.radiusTest>> | null>(null)
 
+  // The shared secret is looked up server-side from the chosen client, so the
+  // browser never handles one.
+  const clients = useAsync(() => api.clients(), [])
+  const clientNames = (clients.data ?? []).map((entry) => entry.name)
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
-    const outcome = await run(() => api.radiusTest(username, password))
+    const outcome = await run(() => api.radiusTest(username, password, client))
     if (outcome) {
       setResult(outcome)
       setPassword('')
@@ -313,7 +319,7 @@ function RadiusTestCard({ canOperate }: { canOperate: boolean }) {
       {!canOperate ? (
         <p className="mt-3 text-sm text-slate-500">Requires the operator role.</p>
       ) : (
-        <form className="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr_auto]" onSubmit={onSubmit}>
+        <form className="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={onSubmit}>
           <div>
             <label className="label" htmlFor="test-username">
               Username
@@ -340,8 +346,29 @@ function RadiusTestCard({ canOperate }: { canOperate: boolean }) {
               required
             />
           </div>
+          <div>
+            <label className="label" htmlFor="test-client">
+              Client
+            </label>
+            <select
+              id="test-client"
+              className="input"
+              value={client}
+              onChange={(event) => setClient(event.target.value)}
+              required
+            >
+              <option value="" disabled>
+                {clients.loading ? 'Loading…' : 'Select a client'}
+              </option>
+              {clientNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-end">
-            <button type="submit" className="btn-primary" disabled={pending}>
+            <button type="submit" className="btn-primary" disabled={pending || clients.loading}>
               {pending ? 'Testing…' : 'Test'}
             </button>
           </div>

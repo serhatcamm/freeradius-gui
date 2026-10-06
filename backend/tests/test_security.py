@@ -1,6 +1,8 @@
 """Security primitives: password hashing, policy and generated secrets."""
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from app.freeradius.clients_parser import parse_clients
@@ -12,6 +14,73 @@ from app.security.passwords import (
     needs_rehash,
     verify_password,
 )
+
+
+# -- session signing key ------------------------------------------------
+def test_concurrent_first_run_agrees_on_one_key(tmp_path, monkeypatch):
+    """First-run key generation must be race-free.
+
+    ``load_secret_key`` is called while serving every request. With a plain
+    check-then-generate, two threads that both find no key each generate a
+    different one: the response that signs a session cookie returns key A
+    while the file holds key B, and the next request reports the session as
+    not found. This is what broke ``/api/users`` on CI, where the timing
+    reliably lost the race.
+    """
+    from app.core import config as config_mod
+
+    key_file = tmp_path / "secret_key"
+    monkeypatch.setenv("FRW_SECRET_KEY_FILE", str(key_file))
+    config_mod.get_settings.cache_clear()
+
+    results: list[bytes] = []
+    barrier = threading.Barrier(8)
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            barrier.wait(timeout=10)
+            results.append(config_mod.load_secret_key())
+        except BaseException as exc:  # noqa: BLE001 - reported below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=15)
+
+    assert not errors, f"worker raised: {errors!r}"
+    assert len(results) == 8
+    assert len(set(results)) == 1, "concurrent callers disagreed on the key"
+    assert key_file.exists()
+    assert key_file.read_bytes().strip() == results[0]
+
+
+def test_existing_key_is_reused(tmp_path, monkeypatch):
+    from app.core import config as config_mod
+
+    key_file = tmp_path / "secret_key"
+    key_file.write_bytes(b"a" * 48)
+    monkeypatch.setenv("FRW_SECRET_KEY_FILE", str(key_file))
+    config_mod.get_settings.cache_clear()
+
+    assert config_mod.load_secret_key() == b"a" * 48
+    assert config_mod.load_secret_key() == b"a" * 48
+
+
+def test_empty_key_file_is_replaced(tmp_path, monkeypatch):
+    """An interrupted first run leaves a zero-length file; it must recover."""
+    from app.core import config as config_mod
+
+    key_file = tmp_path / "secret_key"
+    key_file.write_bytes(b"")
+    monkeypatch.setenv("FRW_SECRET_KEY_FILE", str(key_file))
+    config_mod.get_settings.cache_clear()
+
+    key = config_mod.load_secret_key()
+    assert len(key) == 48
+    assert key_file.read_bytes().strip() == key
 
 
 # -- hashing ------------------------------------------------------------

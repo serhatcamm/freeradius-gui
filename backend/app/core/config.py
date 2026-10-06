@@ -6,7 +6,9 @@ not world-readable rather than from the environment where possible.
 """
 from __future__ import annotations
 
+import os
 import secrets
+import threading
 from functools import lru_cache
 from pathlib import Path
 
@@ -79,26 +81,67 @@ def get_settings() -> Settings:
     return Settings()
 
 
+_secret_key_lock = threading.Lock()
+
+
+def _read_existing_key(path: Path) -> bytes:
+    try:
+        data = path.read_bytes().strip()
+    except OSError:
+        return b""
+    return data
+
+
 def load_secret_key(settings: Settings | None = None) -> bytes:
     """Read the signing key from disk, generating one on first run.
 
     The key is used to sign session cookies. It is generated with
     ``secrets.token_bytes`` and stored 0600, owned by the service user.
+
+    Creation has to be race-free. A plain "read, then generate if missing"
+    lets two concurrent requests each generate a *different* key: the request
+    that signs a session cookie returns key A while the file on disk holds key
+    B, so the very next request fails to verify the cookie and reports the
+    session as not found. The lock serialises threads and ``O_EXCL`` makes the
+    loser of a cross-process race re-read the winner's key instead of
+    overwriting it.
     """
     settings = settings or get_settings()
     path = Path(settings.secret_key_file)
-    if path.exists():
-        data = path.read_bytes().strip()
+
+    with _secret_key_lock:
+        data = _read_existing_key(path)
         if data:
             return data
-    key = secrets.token_bytes(48)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(key)
-    try:
-        os_chmod_600(path)
-    except OSError:
-        pass
-    return key
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        key = secrets.token_bytes(48)
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            # Someone else created it first; their key is the real one.
+            data = _read_existing_key(path)
+            if data:
+                return data
+            # Present but empty (interrupted write): replace it atomically and
+            # return whatever actually landed on disk.
+            tmp = path.with_name(path.name + ".tmp")
+            tmp.write_bytes(key)
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, path)
+            return _read_existing_key(path) or key
+        except OSError:
+            # Unwritable location: fall back to an ephemeral key rather than
+            # failing the request. Sessions will not survive a restart.
+            return key
+
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(key)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+        return key
 
 
 def os_chmod_600(path: Path) -> None:

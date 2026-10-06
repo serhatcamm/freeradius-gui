@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
@@ -20,6 +21,23 @@ from ..services.config_tx import ConfigTransaction
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["panel"])
+
+
+def _client_entry(name: str):
+    """Look up one client in the live clients.conf.
+
+    Returns ``None`` when the file cannot be read or the client is absent, so
+    the caller can turn that into a 404 instead of a 500.
+    """
+    from ..freeradius import paths
+    from ..freeradius.clients_parser import parse_clients
+
+    try:
+        doc = parse_clients(Path(paths.CLIENTS_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        logger.warning("could not read clients.conf for radius test: %s", exc)
+        return None
+    return doc.unique_find(name)
 
 
 # -- dashboard ---------------------------------------------------------
@@ -50,11 +68,33 @@ async def run_radius_test(
     admin: Administrator = Depends(require_role("operator")),
     db: Session = Depends(get_db),
 ) -> dict:
+    secret = payload.secret
+    if not secret:
+        # Resolve the shared secret from a configured client so the browser
+        # never has to carry one. The value is used here and never returned.
+        if not payload.client:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="provide a client name or a secret",
+            )
+        entry = _client_entry(payload.client)
+        if entry is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail=f"no RADIUS client named {payload.client!r}",
+            )
+        if not entry.has_secret:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail=f"client {payload.client!r} has no secret set",
+            )
+        secret = entry.directive("secret").value
+
     return await radius_test.run_test(
         username=payload.username,
         password=payload.password,
         server=payload.server,
-        secret=payload.secret,
+        secret=secret,
         port=payload.port,
         timeout=payload.timeout,
         administrator=admin.username,

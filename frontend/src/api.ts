@@ -10,8 +10,8 @@
  */
 import type {
   Administrator,
-  AuditEntry,
-  Backup,
+  AuditList,
+  BackupList,
   Client,
   Dashboard,
   LogCapability,
@@ -211,19 +211,23 @@ export const api = {
   serviceLog: (lines = 100) => request<{ lines: string[] }>(`/api/service/log?lines=${lines}`),
 
   // -- radius test -------------------------------------------------------
-  radiusTest: (username: string, password: string) =>
+  // The shared secret is resolved server-side from a configured client, so it
+  // is never sent from or received by the browser.
+  radiusTest: (username: string, password: string, client: string) =>
     request<RadiusTestResult>('/api/radius/test', {
       method: 'POST',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, client }),
     }),
 
   // -- backups & audit ---------------------------------------------------
-  backups: () => request<Backup[]>('/api/backups'),
+  // Both list endpoints wrap their payload in an object; treating the
+  // response as a bare array makes .map() throw and blanks the page.
+  backups: () => request<BackupList>('/api/backups'),
   rollback: (id: string) =>
     request<{ ok: boolean; message?: string }>(`/api/backups/${encodeURIComponent(id)}/rollback`, {
       method: 'POST',
     }),
-  audit: () => request<AuditEntry[]>('/api/audit'),
+  audit: () => request<AuditList>('/api/audit'),
 }
 
 export type {

@@ -174,6 +174,115 @@ def test_viewer_can_still_read_backups_and_settings(client, viewer):
     assert client.get("/api/settings").status_code == 200
 
 
+# -- radius test: secret resolution -------------------------------------
+def test_radius_test_requires_a_client_or_secret(client, operator):
+    """The UI sends only username+password+client.
+
+    With no secret and no client name there is nothing to sign the
+    Access-Request with, so this is a 422 by construction.
+    """
+    login(client, "operator", "Oper4torPassw0rd!")
+    r = client.post(
+        "/api/radius/test",
+        json={"username": "testuser", "password": "TestRadiusPw123!"},
+        headers=csrf_headers(client),
+    )
+    assert r.status_code == 422, f"{r.status_code} {r.text} :: {_diagnose(client)}"
+
+
+def test_radius_test_unknown_client_is_404(client, operator):
+    login(client, "operator", "Oper4torPassw0rd!")
+    r = client.post(
+        "/api/radius/test",
+        json={"username": "testuser", "password": "x", "client": "no-such-nas"},
+        headers=csrf_headers(client),
+    )
+    assert r.status_code == 404, f"{r.status_code} {r.text} :: {_diagnose(client)}"
+
+
+def test_radius_test_resolves_secret_from_client(client, operator, monkeypatch):
+    """The secret comes from clients.conf, never from the request body."""
+    captured: dict = {}
+
+    async def fake_run_test(**kwargs):
+        captured.update(kwargs)
+        return {
+            "result": "Access-Accept",
+            "response_time_ms": 1.0,
+            "username": kwargs["username"],
+            "server": kwargs["server"],
+            "port": kwargs["port"],
+            "returned_attributes": [],
+            "request_attributes": [],
+            "message_authenticator": None,
+            "error": None,
+        }
+
+    monkeypatch.setattr("app.services.radius_test.run_test", fake_run_test)
+
+    login(client, "operator", "Oper4torPassw0rd!")
+    r = client.post(
+        "/api/radius/test",
+        json={"username": "testuser", "password": "TestRadiusPw123!", "client": "test-nas-a"},
+        headers=csrf_headers(client),
+    )
+    assert r.status_code == 200, f"{r.status_code} {r.text} :: {_diagnose(client)}"
+    assert captured["secret"] == "TestNasSecret123!", captured
+    # The secret must not be echoed back to the browser.
+    assert "TestNasSecret123!" not in r.text
+
+
+def test_radius_test_client_without_secret_is_409(client, operator, env, monkeypatch):
+    """A NAS with no secret cannot sign a request; say so plainly."""
+    from app.freeradius import paths as paths_mod
+
+    paths_mod.CLIENTS_FILE.write_text(
+        "client no_secret_nas {\n"
+        "    ipaddr = 192.0.2.90\n"
+        "    nas_type = other\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    login(client, "operator", "Oper4torPassw0rd!")
+    r = client.post(
+        "/api/radius/test",
+        json={"username": "testuser", "password": "x", "client": "no_secret_nas"},
+        headers=csrf_headers(client),
+    )
+    assert r.status_code == 409, f"{r.status_code} {r.text} :: {_diagnose(client)}"
+
+
+def test_radius_test_explicit_secret_still_works(client, operator, monkeypatch):
+    """Callers that already hold a secret can keep passing one."""
+    captured: dict = {}
+
+    async def fake_run_test(**kwargs):
+        captured.update(kwargs)
+        return {
+            "result": "Access-Accept",
+            "response_time_ms": 1.0,
+            "username": kwargs["username"],
+            "server": kwargs["server"],
+            "port": kwargs["port"],
+            "returned_attributes": [],
+            "request_attributes": [],
+            "message_authenticator": None,
+            "error": None,
+        }
+
+    monkeypatch.setattr("app.services.radius_test.run_test", fake_run_test)
+
+    login(client, "operator", "Oper4torPassw0rd!")
+    r = client.post(
+        "/api/radius/test",
+        json={"username": "testuser", "password": "x", "secret": "ExplicitSecret123!"},
+        headers=csrf_headers(client),
+    )
+    assert r.status_code == 200, f"{r.status_code} {r.text} :: {_diagnose(client)}"
+    assert captured["secret"] == "ExplicitSecret123!", captured
+
+
 # -- data exposure ------------------------------------------------------
 def test_client_secrets_are_not_exposed(client, admin):
     login(client, "admin", "Str0ngPassw0rd!")

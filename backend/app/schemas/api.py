@@ -147,7 +147,11 @@ class RadiusTestRequest(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
     server: str = Field(default="127.0.0.1", max_length=253)
     port: int = Field(default=0, ge=0, le=65535)
-    secret: str = Field(min_length=1, max_length=128)
+    # Either supply the shared secret directly, or name a configured client and
+    # let the server resolve it. The browser never has to hold a secret, which
+    # keeps the "the API never returns client secrets" rule intact.
+    secret: str | None = Field(default=None, min_length=1, max_length=128)
+    client: str | None = Field(default=None, max_length=64)
     timeout: int = Field(default=15, ge=3, le=60)
 
 

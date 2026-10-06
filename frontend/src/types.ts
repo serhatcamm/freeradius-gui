@@ -206,6 +206,30 @@ export interface AuditEntry {
   [key: string]: unknown
 }
 
+/** GET /api/backups returns {backups, count}, not a bare array. */
+export interface BackupList {
+  backups: Backup[]
+  count: number
+}
+
+/** GET /api/audit returns {entries, count}, not a bare array. */
+export interface AuditList {
+  entries: AuditEntry[]
+  count: number
+}
+
 export interface Settings {
+  environment?: string
+  docs_enabled?: boolean
+  session_timeout_seconds?: number
+  idle_timeout_seconds?: number
+  cookie_secure?: boolean
+  database?: string
+  raddb_dir?: string
+  /** A mapping of logical name -> absolute path, not a list. */
+  managed_files?: Record<string, string>
+  backup_dir?: string
+  log_dir?: string
+  audit_logging?: boolean
   [key: string]: unknown
 }

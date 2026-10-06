@@ -21,7 +21,9 @@ export function BackupsPage() {
   const [selected, setSelected] = useState<Backup | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
-  const rows = backups.data ?? []
+  // The endpoint wraps the list in {backups, count}; calling .map() on the
+  // envelope throws during render and blanks the page.
+  const rows = backups.data?.backups ?? []
 
   async function confirmRollback() {
     if (!selected) return
