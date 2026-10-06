@@ -25,6 +25,12 @@ ENV_FILE="$ENV_DIR/app.env"
 # works when the frontend is built on a workstation and shipped with the bundle.
 STATIC_SRC="${STATIC_SRC:-}"
 
+# AD support is intentionally opt-in: installing Samba/winbind changes the
+# host's authentication surface, even though it does not join a domain. The
+# panel's Active Directory page still reports these packages as prerequisites
+# when this is left disabled.
+INSTALL_AD_DEPENDENCIES="${INSTALL_AD_DEPENDENCIES:-0}"
+
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
@@ -32,6 +38,16 @@ die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
 command -v python3 >/dev/null || die "python3 not found"
 [[ -d $RADDB ]] || die "FreeRADIUS configuration not found at $RADDB"
+
+# --------------------------------------------------------------- AD prerequisites
+if [[ "$INSTALL_AD_DEPENDENCIES" == "1" ]]; then
+    command -v apt-get >/dev/null || die "apt-get not found; install AD packages manually"
+    log "Installing optional Active Directory prerequisites"
+    apt-get update
+    apt-get install -y freeradius-ldap samba-common-bin winbind
+else
+    log "Skipping optional AD packages (set INSTALL_AD_DEPENDENCIES=1 to install)"
+fi
 
 # ---------------------------------------------------------------- service user
 log "Creating service account $SERVICE_USER"
@@ -92,6 +108,16 @@ else
         log "  WARNING: groupfile is not set up correctly in $FILES_MODULE"
         log "           expected exactly one 'groupfile = \${moddir}/groups' line"
     fi
+fi
+
+# The ntlm_auth module is shipped by FreeRADIUS but is not enabled by every
+# distro package. Enabling its module definition is harmless before a domain
+# join: it only runs when the AD block is explicitly enabled by the panel.
+NTLM_AVAILABLE="$RADDB/mods-available/ntlm_auth"
+NTLM_ENABLED="$RADDB/mods-enabled/ntlm_auth"
+if [[ -f "$NTLM_AVAILABLE" && ! -e "$NTLM_ENABLED" ]]; then
+    ln -s ../mods-available/ntlm_auth "$NTLM_ENABLED"
+    log "  enabled FreeRADIUS ntlm_auth module"
 fi
 
 if [ ! -f "$GROUPS_FILE" ]; then

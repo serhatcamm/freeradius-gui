@@ -21,6 +21,7 @@ frontend/    React + TypeScript + Vite single-page app
 | Backups | Every mutation is snapshotted; one-click rollback re-validates before writing. History is append-only. |
 | Audit | Who did what, from where, which backup, when. |
 | Service | Status, `freeradius -XC` result, journal, restart/reload. |
+| Active Directory | Optional RADIUS-user authentication through Samba/winbind `ntlm_auth`, with `rlm_ldap` attribute/group lookup and AD-to-RADIUS group mapping. |
 
 ## Design notes
 
@@ -37,6 +38,10 @@ frontend/    React + TypeScript + Vite single-page app
 - **Groups are reported as unavailable when inert.** If the `files` module has no
   active `groupfile`, the UI says so rather than showing a count that has no
   effect on authentication.
+- **AD password verification does not use an LDAP user bind.** The panel uses
+  `ntlm_auth`/winbind for PAP and MS-CHAPv1 and reserves `rlm_ldap` for
+  read-only directory lookups. A dedicated read-only bind account is required;
+  the connection must use LDAPS or StartTLS.
 
 ## Requirements
 
@@ -62,6 +67,18 @@ sudo -u freeradius-web /opt/freeradius-web/venv/bin/python -m app.cli \
 It also enables group support: it inserts `groupfile = ${moddir}/groups` into
 `mods-available/files` if absent and seeds an empty `mods-config/files/groups`
 owned `root:freerad` mode 0640. Both steps are idempotent, so re-running is safe.
+
+AD packages are opt-in because Samba/winbind changes the host authentication
+surface. Install the prerequisites without joining a domain with:
+
+```bash
+sudo INSTALL_AD_DEPENDENCIES=1 ./backend/scripts/install.sh
+```
+
+The Active Directory page then stores the domain configuration without enabling
+it until the host is joined to the domain. The panel does not perform the join
+or connect to a domain automatically; run the reviewed `net ads join` procedure
+for the environment first, then enable AD from the admin-only page.
 
 Then open `https://<host>/`.
 

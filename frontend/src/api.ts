@@ -9,6 +9,8 @@
  *    surfaced distinctly for the auth layer to react to.
  */
 import type {
+  ActiveDirectorySettings,
+  ActiveDirectorySettingsInput,
   Administrator,
   AdministratorCreate,
   AdministratorList,
@@ -302,6 +304,18 @@ export const api = {
     request<AlertList>(`/api/alerts?unacknowledged_only=${unacknowledgedOnly}`),
   acknowledgeAlert: (id: number) =>
     request<{ ok: boolean }>(`/api/alerts/${id}/acknowledge`, { method: 'POST' }),
+
+  // -- active directory ------------------------------------------------
+  activeDirectory: () => request<ActiveDirectorySettings>('/api/active-directory'),
+  saveActiveDirectory: (body: ActiveDirectorySettingsInput) =>
+    request<ActiveDirectorySettings>('/api/active-directory', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  disconnectActiveDirectory: () =>
+    request<{ ok: boolean; message?: string }>('/api/active-directory/disconnect', {
+      method: 'POST',
+    }),
 }
 
 export type {
@@ -310,6 +324,8 @@ export type {
   AdministratorList,
   AdministratorRecord,
   AdministratorUpdate,
+  ActiveDirectorySettings,
+  ActiveDirectorySettingsInput,
   Alert,
   AlertList,
   AlertMetric,

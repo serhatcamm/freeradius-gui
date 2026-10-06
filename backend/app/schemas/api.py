@@ -277,6 +277,62 @@ class SecretResponse(BaseModel):
     )
 
 
+# -- active directory --------------------------------------------------
+class AdSettingsIn(BaseModel):
+    """The AD connection to store.
+
+    ``bind_password`` is write-only: omitting it keeps the stored credential,
+    because the panel cannot read it back. There is no way to blank it -
+    use the disconnect endpoint for that.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    domain: str = Field(min_length=1, max_length=255)
+    base_dn: str = Field(min_length=1, max_length=512)
+    bind_dn: str = Field(min_length=1, max_length=512)
+    servers: list[str] = Field(min_length=1, max_length=16)
+    port: int = Field(default=389, ge=1, le=65535)
+    use_ldaps: bool = False
+    start_tls: bool = True
+    tls_ca: str | None = Field(default=None, max_length=512)
+    membership_attribute: str = Field(default="memberOf", min_length=1, max_length=64)
+    membership_delimiter: str = Field(default=";", min_length=1, max_length=8)
+    group_map: dict[str, str] = Field(default_factory=dict)
+    bind_password: str | None = Field(default=None, min_length=12, max_length=512)
+    #: Install into the live raddb as part of this request. Storing settings
+    #: without enabling them is deliberate: enabling changes how every RADIUS
+    #: user authenticates, so it should be a separate, explicit action.
+    enable: bool = False
+
+
+class AdSettingsOut(BaseModel):
+    """Stored AD settings, without the bind password."""
+
+    configured: bool
+    domain: str | None = None
+    base_dn: str | None = None
+    bind_dn: str | None = None
+    servers: list[str] = Field(default_factory=list)
+    port: int = 389
+    use_ldaps: bool = False
+    start_tls: bool = True
+    tls_ca: str | None = None
+    membership_attribute: str = "memberOf"
+    membership_delimiter: str = ";"
+    group_map: dict[str, str] = Field(default_factory=dict)
+    bind_password_set: bool = False
+    enabled: bool = False
+    ldap_block_installed: bool = False
+    ldap_module_installed: bool = False
+    ntlm_auth_available: bool = False
+    winbind_installed: bool = False
+    winbind_joined: bool = False
+    ready: bool = False
+    prerequisites: list[dict] = Field(default_factory=list)
+    blocked_by: list[str] = Field(default_factory=list)
+
+
 # -- radius test -------------------------------------------------------
 class RadiusTestRequest(BaseModel):
     username: str = Field(min_length=1, max_length=63)
@@ -325,6 +381,8 @@ class ValidationOut(BaseModel):
 
 
 __all__ = [
+    "AdSettingsIn",
+    "AdSettingsOut",
     "AdministratorOut",
     "ChangePasswordRequest",
     "ClientCreate",

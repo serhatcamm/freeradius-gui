@@ -352,6 +352,47 @@ export interface AlertRuleInput {
   client?: string | null
 }
 
+export interface ActiveDirectorySettings {
+  configured: boolean
+  domain: string | null
+  base_dn: string | null
+  bind_dn: string | null
+  servers: string[]
+  port: number
+  use_ldaps: boolean
+  start_tls: boolean
+  tls_ca: string | null
+  membership_attribute: string
+  membership_delimiter: string
+  group_map: Record<string, string>
+  bind_password_set: boolean
+  enabled: boolean
+  ldap_block_installed: boolean
+  ldap_module_installed: boolean
+  ntlm_auth_available: boolean
+  winbind_installed: boolean
+  winbind_joined: boolean
+  ready: boolean
+  prerequisites: Array<{ name: string; ok: boolean; detail: string }>
+  blocked_by: string[]
+}
+
+export interface ActiveDirectorySettingsInput {
+  domain: string
+  base_dn: string
+  bind_dn: string
+  servers: string[]
+  port: number
+  use_ldaps: boolean
+  start_tls: boolean
+  tls_ca?: string | null
+  membership_attribute: string
+  membership_delimiter: string
+  group_map: Record<string, string>
+  bind_password?: string
+  enable: boolean
+}
+
 /** GET /api/audit returns {entries, count}, not a bare array. */
 export interface AuditList {
   entries: AuditEntry[]

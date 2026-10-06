@@ -120,6 +120,45 @@ class LoginAttempt(Base):
     successful: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class AdSettings(Base):
+    """The Active Directory connection this panel manages.
+
+    A single row: there is one domain. The bind password is held here rather
+    than re-derived per request because rlm_ldap has to read it from the module
+    file, and keeping a second copy in the database lets the panel show whether
+    one is configured without ever revealing it.
+
+    ``bind_password`` is the one place a directory credential is stored outside
+    FreeRADIUS's root-owned module file, so it is excluded from every audit
+    payload - see ``services.audit``'s secret redaction.
+    """
+
+    __tablename__ = "ad_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    domain: Mapped[str] = mapped_column(String(255))
+    base_dn: Mapped[str] = mapped_column(String(512))
+    bind_dn: Mapped[str] = mapped_column(String(512))
+    #: Comma-separated. A single scalar keeps the schema portable; the service
+    #: parses it and the API always presents a list.
+    servers: Mapped[str] = mapped_column(String(1024))
+    port: Mapped[int] = mapped_column(Integer, default=389)
+    use_ldaps: Mapped[bool] = mapped_column(Boolean, default=False)
+    start_tls: Mapped[bool] = mapped_column(Boolean, default=True)
+    tls_ca: Mapped[str | None] = mapped_column(String(512))
+    membership_attribute: Mapped[str] = mapped_column(String(64), default="memberOf")
+    membership_delimiter: Mapped[str] = mapped_column(String(8), default=";")
+    #: AD group DN -> RADIUS group name, as JSON.
+    group_map: Mapped[str] = mapped_column(Text, default="{}")
+    bind_password: Mapped[str | None] = mapped_column(String(512))
+    #: Whether the managed block is currently installed in the raddb.
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    updated_by: Mapped[str | None] = mapped_column(String(64))
+
+
 class AlertRule(Base):
     """A threshold over authentication activity.
 

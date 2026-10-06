@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 
 import { useAuth, useCan } from './auth/AuthContext'
 import { AccountsPage } from './pages/AccountsPage'
+import { ActiveDirectoryPage } from './pages/ActiveDirectoryPage'
 import { AuditPage } from './pages/AuditPage'
 import { AdministratorsPage } from './pages/AdministratorsPage'
 import { AlertsPage } from './pages/AlertsPage'
@@ -25,6 +26,7 @@ const NAV = [
   { to: '/backups', label: 'Backups' },
   { to: '/audit', label: 'Audit' },
   { to: '/administrators', label: 'Administrators', adminOnly: true },
+  { to: '/active-directory', label: 'Active Directory', adminOnly: true },
   { to: '/settings', label: 'Settings' },
 ]
 
@@ -64,6 +66,7 @@ export default function App() {
             <Route path="/backups" element={<BackupsPage />} />
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/administrators" element={<AdministratorsPage />} />
+            <Route path="/active-directory" element={<ActiveDirectoryPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<DashboardPage />} />
           </Routes>

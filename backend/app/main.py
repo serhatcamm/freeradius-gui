@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from .api import active_directory as ad_router
 from .api import admins as admins_router
 from .api import alerts as alerts_router
 from .api import auth as auth_router
@@ -142,6 +143,7 @@ app.include_router(alerts_router.router)
 app.include_router(users_router.router)
 app.include_router(clients_router.router)
 app.include_router(groups_router.router)
+app.include_router(ad_router.router)
 app.include_router(logs_router.router)
 app.include_router(panel_router.router)
 
