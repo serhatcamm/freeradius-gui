@@ -218,18 +218,41 @@ export interface RadiusTestResult {
   error: string | null
 }
 
+/** One file inside a backup. Absent from the label when it did not exist. */
+export interface BackupFile {
+  path: string
+  present: boolean
+  stored_as?: string
+  sha256?: string
+  size?: number
+  mode?: number
+}
+
+/** One file's unified diff between a backup and the live file. */
+export interface BackupDiff {
+  label: string
+  path: string
+  changed: boolean
+  diff: string
+}
+
 export interface Backup {
   id: string
-  label: string
-  path?: string
-  operation?: string
-  administrator?: string
+  operation: string
+  administrator: string
+  hostname?: string
   source_ip?: string | null
-  created_at?: string
-  size_bytes?: number
-  sha256?: string
+  created_at: string
   notes?: string | null
-  [key: string]: unknown
+  files: Record<string, BackupFile>
+  changed_files?: string[]
+}
+
+/** GET /api/backups/{id} response. */
+export interface BackupDetail {
+  backup: Backup
+  diff: BackupDiff[]
+  changed: boolean
 }
 
 export interface AuditEntry {
@@ -248,6 +271,85 @@ export interface AuditEntry {
 export interface BackupList {
   backups: Backup[]
   count: number
+}
+
+/** One row of GET /api/administrators. */
+export interface AdministratorRecord extends Administrator {
+  is_active: boolean
+  created_at: string | null
+  last_login_ip: string | null
+  failed_attempts: number
+  locked_until: string | null
+  session_count: number
+  is_self: boolean
+}
+
+export interface AdministratorList {
+  administrators: AdministratorRecord[]
+  count: number
+  active_admin_count: number
+}
+
+export interface AdministratorCreate {
+  username: string
+  password: string
+  role: Role
+  full_name?: string | null
+}
+
+export interface AdministratorUpdate {
+  role?: Role
+  full_name?: string | null
+  is_active?: boolean
+}
+
+export type AlertMetric = 'failures' | 'successes' | 'challenges' | 'total'
+
+export interface AlertRule {
+  id: number
+  name: string
+  metric: AlertMetric
+  metric_label: string
+  username: string | null
+  client: string | null
+  threshold: number
+  window_seconds: number
+  enabled: boolean
+  created_at: string | null
+  created_by: string | null
+  last_fired_at: string | null
+  /** Events counted in the current window as of the last evaluation. */
+  observed: number
+  would_fire: boolean
+}
+
+export interface Alert {
+  id: number
+  raised_at: string | null
+  observed: number
+  threshold: number
+  rule_name: string
+  metric: AlertMetric
+  metric_label: string
+  username: string | null
+  client: string | null
+  acknowledged_at: string | null
+  acknowledged_by: string | null
+}
+
+export interface AlertList {
+  alerts: Alert[]
+  count: number
+}
+
+/** POST/PATCH body for an alert rule. */
+export interface AlertRuleInput {
+  name: string
+  metric: AlertMetric
+  threshold: number
+  window_seconds: number
+  username?: string | null
+  client?: string | null
 }
 
 /** GET /api/audit returns {entries, count}, not a bare array. */

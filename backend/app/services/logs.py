@@ -130,13 +130,24 @@ def _classify(message: str) -> dict:
         out["result"] = "Access-Accept"
     elif _RE_REJECT.search(message):
         out["result"] = "Access-Reject"
-    um = re.search(r"(?:user|User-Name)\s*=\s*\"?([^\"\s]+)", message)
+    um = re.search(r"(?:user|User-Name)\s*=\s*\"?([^\"\s,]+)", message)
     if um:
         out["username"] = um.group(1)
-    # linelog lines use the same key=value shape as radius.log, so the NAS and
-    # client filters work on request-log entries too.
-    for key, name in (("nas", "nas_ip"), ("client", "client")):
-        km = re.search(rf"\b{key}=(\S*)", message)
+
+    # radius.log spells these out as the RADIUS attribute names, while the
+    # linelog block the panel installs abbreviates them to nas=/client=. Both
+    # shapes have to resolve or the NAS and client filters silently match
+    # nothing against real request lines. A comma terminates a value because
+    # FreeRADIUS separates attributes with them.
+    for pattern, name in (
+        (r"\bnas=([^\s,]+)", "nas_ip"),
+        (r"\bclient=([^\s,]+)", "client"),
+        (r"\bNAS-IP-Address=[\"']?([^\"\s,]+)", "nas_ip"),
+        (r"\bCalled-Station-Id=[\"']?([^\"\s,]+)", "client"),
+    ):
+        if name in out:
+            continue
+        km = re.search(pattern, message)
         if km:
             out[name] = km.group(1) or None
     return out

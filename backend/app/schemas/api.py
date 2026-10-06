@@ -22,6 +22,105 @@ class AdministratorOut(BaseModel):
     last_login_at: str | None = None
 
 
+# -- alerts -------------------------------------------------------------
+class AlertRuleCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    metric: str
+    threshold: int
+    window_seconds: int
+    username: str | None = Field(default=None, max_length=64)
+    client: str | None = Field(default=None, max_length=64)
+
+
+class AlertRuleUpdate(BaseModel):
+    """Every field optional; omitted fields keep their current value."""
+
+    metric: str | None = None
+    threshold: int | None = None
+    window_seconds: int | None = None
+    username: str | None = Field(default=None, max_length=64)
+    client: str | None = Field(default=None, max_length=64)
+    enabled: bool | None = None
+
+
+class AlertRuleOut(BaseModel):
+    id: int
+    name: str
+    metric: str
+    metric_label: str
+    username: str | None = None
+    client: str | None = None
+    threshold: int
+    window_seconds: int
+    enabled: bool
+    created_at: str | None = None
+    created_by: str | None = None
+    last_fired_at: str | None = None
+    #: Events counted in the current window when the rule was last evaluated.
+    observed: int = 0
+    would_fire: bool = False
+
+
+class AlertOut(BaseModel):
+    id: int
+    raised_at: str | None = None
+    observed: int
+    threshold: int
+    rule_name: str
+    metric: str
+    metric_label: str
+    username: str | None = None
+    client: str | None = None
+    acknowledged_at: str | None = None
+    acknowledged_by: str | None = None
+
+
+class AlertList(BaseModel):
+    alerts: list[AlertOut]
+    count: int
+
+
+class AdministratorRecord(AdministratorOut):
+    """One row in the administrator list.
+
+    ``is_self`` lets the UI disable the actions that would lock the operator
+    out of their own session; the server rejects them regardless.
+    """
+
+    is_active: bool
+    created_at: str | None = None
+    last_login_ip: str | None = None
+    failed_attempts: int = 0
+    locked_until: str | None = None
+    session_count: int = 0
+    is_self: bool = False
+
+
+class AdministratorList(BaseModel):
+    administrators: list[AdministratorRecord]
+    count: int
+    active_admin_count: int
+
+
+class AdministratorCreate(BaseModel):
+    username: str = Field(min_length=2, max_length=64)
+    password: str = Field(min_length=12, max_length=1024)
+    role: str = Field(default="viewer")
+    full_name: str | None = Field(default=None, max_length=128)
+
+
+class AdministratorUpdate(BaseModel):
+    """Every field optional; omitted fields are left untouched."""
+
+    role: str | None = None
+    full_name: str | None = Field(default=None, max_length=128)
+    is_active: bool | None = None
+
+
+class AdministratorPasswordReset(BaseModel):
+    new_password: str = Field(min_length=12, max_length=1024)
+
+
 class LoginResponse(BaseModel):
     administrator: AdministratorOut
     csrf_token: str

@@ -3,6 +3,8 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 import { useAuth, useCan } from './auth/AuthContext'
 import { AccountsPage } from './pages/AccountsPage'
 import { AuditPage } from './pages/AuditPage'
+import { AdministratorsPage } from './pages/AdministratorsPage'
+import { AlertsPage } from './pages/AlertsPage'
 import { BackupsPage } from './pages/BackupsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { GroupsPage } from './pages/GroupsPage'
@@ -18,9 +20,11 @@ const NAV = [
   { to: '/clients', label: 'Clients' },
   { to: '/groups', label: 'Groups' },
   { to: '/logs', label: 'Logs' },
+  { to: '/alerts', label: 'Alerts' },
   { to: '/service', label: 'Service' },
   { to: '/backups', label: 'Backups' },
   { to: '/audit', label: 'Audit' },
+  { to: '/administrators', label: 'Administrators', adminOnly: true },
   { to: '/settings', label: 'Settings' },
 ]
 
@@ -56,8 +60,10 @@ export default function App() {
     <Route path="/groups" element={<GroupsPage />} />
     <Route path="/logs" element={<LogsPage />} />
             <Route path="/service" element={<ServicePage />} />
+            <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/backups" element={<BackupsPage />} />
             <Route path="/audit" element={<AuditPage />} />
+            <Route path="/administrators" element={<AdministratorsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<DashboardPage />} />
           </Routes>
@@ -99,7 +105,7 @@ function Nav() {
   return (
     <nav aria-label="Sections" className="lg:w-52 lg:shrink-0">
       <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
-        {NAV.map((item) => (
+        {NAV.filter((item) => !item.adminOnly || can.isAdmin).map((item) => (
           <li key={item.to}>
             <NavLink
               to={item.to}

@@ -42,10 +42,40 @@ def raddb_copy() -> Iterator[Path]:
     base.chmod(0o755)
     dest = base / "3.0"
     subprocess.run(["cp", "-a", str(RADDB), str(dest)], check=True)
+
+    # The live tree may already carry managed blocks, because the panel has
+    # installed them on this host at some point. A round-trip test needs a
+    # pristine file: install_* is idempotent (a no-op when the block is
+    # present), so remove_* would then strip a block it did not add and the
+    # round trip could never restore the original. Strip the markers from the
+    # copy only - the live files are never touched.
+    _strip_managed_blocks(dest)
+
     try:
         yield dest
     finally:
         shutil.rmtree(base, ignore_errors=True)
+
+
+def _strip_managed_blocks(raddb: Path) -> None:
+    """Remove the panel's managed logging blocks from a copied config tree."""
+    import app.services.logs as logs_mod
+
+    for path, begin, end in (
+        (raddb / "sites-available" / "default", logs_mod._BEGIN, logs_mod._END),
+        (raddb / "mods-available" / "linelog", logs_mod._BEGIN_DETAIL, logs_mod._END_DETAIL),
+    ):
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if begin not in text:
+            continue
+        # Mirror the removal the service performs, including the newline that
+        # install inserted, so the stripped file matches a never-touched one.
+        pattern = re.compile(rf"\n{re.escape(begin)}.*?{re.escape(end)}", re.DOTALL)
+        cleaned = pattern.sub("", text)
+        path.write_text(cleaned, encoding="utf-8")
+        _sync_ownership(path)
 
 
 def _sync_ownership(tree: Path) -> None:

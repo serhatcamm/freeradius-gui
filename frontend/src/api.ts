@@ -10,7 +10,15 @@
  */
 import type {
   Administrator,
+  AdministratorCreate,
+  AdministratorList,
+  AdministratorRecord,
+  AdministratorUpdate,
+  AlertList,
+  AlertRule,
+  AlertRuleInput,
   AuditList,
+  BackupDetail,
   BackupList,
   Client,
   Dashboard,
@@ -240,17 +248,76 @@ export const api = {
   // Both list endpoints wrap their payload in an object; treating the
   // response as a bare array makes .map() throw and blanks the page.
   backups: () => request<BackupList>('/api/backups'),
+  // The diff is computed server-side: the backup holds the "before" bytes and
+  // only the service account can read the live files.
+  backup: (id: string) =>
+    request<BackupDetail>(`/api/backups/${encodeURIComponent(id)}`),
   rollback: (id: string) =>
     request<{ ok: boolean; message?: string }>(`/api/backups/${encodeURIComponent(id)}/rollback`, {
       method: 'POST',
     }),
   audit: () => request<AuditList>('/api/audit'),
+
+  // -- administrators ----------------------------------------------------
+  // Every one of these is admin-only; the server enforces it regardless of
+  // what the UI shows.
+  administrators: () => request<AdministratorList>('/api/administrators'),
+  createAdministrator: (body: AdministratorCreate) =>
+    request<AdministratorRecord>('/api/administrators', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateAdministrator: (username: string, body: AdministratorUpdate) =>
+    request<AdministratorRecord>(`/api/administrators/${encodeURIComponent(username)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  resetAdministratorPassword: (username: string, newPassword: string) =>
+    request<{ ok: boolean; message?: string }>(
+      `/api/administrators/${encodeURIComponent(username)}/password`,
+      { method: 'POST', body: JSON.stringify({ new_password: newPassword }) },
+    ),
+  unlockAdministrator: (username: string) =>
+    request<{ ok: boolean; message?: string }>(
+      `/api/administrators/${encodeURIComponent(username)}/unlock`,
+      { method: 'POST' },
+    ),
+  deactivateAdministrator: (username: string) =>
+    request<{ ok: boolean; message?: string }>(
+      `/api/administrators/${encodeURIComponent(username)}`,
+      { method: 'DELETE' },
+    ),
+
+  // -- alerts -----------------------------------------------------------
+  // Reading the rules or the alert list evaluates them, so both responses
+  // carry a current observed count.
+  alertRules: () => request<AlertRule[]>('/api/alerts/rules'),
+  createAlertRule: (body: AlertRuleInput) =>
+    request<AlertRule>('/api/alerts/rules', { method: 'POST', body: JSON.stringify(body) }),
+  updateAlertRule: (id: number, body: Partial<AlertRuleInput> & { enabled?: boolean }) =>
+    request<AlertRule>(`/api/alerts/rules/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteAlertRule: (id: number) =>
+    request<{ ok: boolean }>(`/api/alerts/rules/${id}`, { method: 'DELETE' }),
+  alerts: (unacknowledgedOnly = false) =>
+    request<AlertList>(`/api/alerts?unacknowledged_only=${unacknowledgedOnly}`),
+  acknowledgeAlert: (id: number) =>
+    request<{ ok: boolean }>(`/api/alerts/${id}/acknowledge`, { method: 'POST' }),
 }
 
 export type {
   Administrator,
+  AdministratorCreate,
+  AdministratorList,
+  AdministratorRecord,
+  AdministratorUpdate,
+  Alert,
+  AlertList,
+  AlertMetric,
+  AlertRule,
+  AlertRuleInput,
   AuditEntry,
   Backup,
+  BackupDetail,
   Client,
   Dashboard,
   Group,

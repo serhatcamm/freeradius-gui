@@ -13,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from .api import admins as admins_router
+from .api import alerts as alerts_router
 from .api import auth as auth_router
 from .api import clients as clients_router
 from .api import groups as groups_router
@@ -135,6 +137,8 @@ async def api_health() -> dict:
 
 # -- API routers -------------------------------------------------------
 app.include_router(auth_router.router)
+app.include_router(admins_router.router)
+app.include_router(alerts_router.router)
 app.include_router(users_router.router)
 app.include_router(clients_router.router)
 app.include_router(groups_router.router)

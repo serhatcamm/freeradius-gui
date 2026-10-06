@@ -112,9 +112,11 @@ def db_env(tmp_path_factory):
 def truncate_auth_tables(session) -> None:
     """Empty the tables the API tests write to."""
     from app.models.db import Administrator, AuditLog, LoginAttempt
+    from app.models.db import Alert, AlertRule
     from app.models.db import Session as SessionRow
 
-    for model in (SessionRow, LoginAttempt, AuditLog, Administrator):
+    # Alerts first: they reference alert_rules by foreign key.
+    for model in (Alert, AlertRule, SessionRow, LoginAttempt, AuditLog, Administrator):
         session.query(model).delete()
     session.commit()
 

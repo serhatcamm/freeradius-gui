@@ -118,3 +118,53 @@ class LoginAttempt(Base):
         DateTime(timezone=True), default=utcnow, index=True
     )
     successful: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class AlertRule(Base):
+    """A threshold over authentication activity.
+
+    ``metric`` selects what is counted; ``threshold`` is the value it must
+    reach within ``window_seconds`` to fire. Rules are evaluated on demand
+    (see ``services.alerts``), not by a background timer, so the panel stays
+    stateless and a restart cannot silently drop alerts.
+    """
+
+    __tablename__ = "alert_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True)
+    metric: Mapped[str] = mapped_column(String(32))
+    #: FreeRADIUS username the rule is scoped to; None means any user.
+    username: Mapped[str | None] = mapped_column(String(64))
+    #: FreeRADIUS client name the rule is scoped to; None means any client.
+    client: Mapped[str | None] = mapped_column(String(64))
+    threshold: Mapped[int] = mapped_column(Integer)
+    window_seconds: Mapped[int] = mapped_column(Integer)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[str] = mapped_column(String(64))
+    last_fired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Alert(Base):
+    """A raised alert.
+
+    Deduped against the rule's ``last_fired_at`` so a sustained condition does
+    not produce one row per evaluation.
+    """
+
+    __tablename__ = "alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    rule_id: Mapped[int] = mapped_column(
+        ForeignKey("alert_rules.id", ondelete="CASCADE"), index=True
+    )
+    raised_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+    #: The observed value that crossed the threshold.
+    observed: Mapped[int] = mapped_column(Integer)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    acknowledged_by: Mapped[str | None] = mapped_column(String(64))
+
+    rule: Mapped[AlertRule] = relationship()
