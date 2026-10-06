@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      # The suite only references these binaries as argv strings, but installing
+      # them keeps the runner close to the deployment target and rules out
+      # environment-dependent passes.
+      - name: Install FreeRADIUS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends freeradius
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Byte-compile
+        run: python -m compileall -q app
+
+      # The privileged-writer tests exercise the root-only frw-write wrapper, so
+      # the suite must run as root. tests/conftest.py asserts every config path
+      # is redirected into a tmp sandbox and fails if anything resolves inside
+      # the live raddb, which is what makes a root run safe.
+      - name: Run tests (as root)
+        run: sudo -E env "PATH=$PATH" python -m pytest
+
+  frontend:
+    name: Frontend (typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The test fixtures were originally copied verbatim from a live
+      # FreeRADIUS host, which leaked a real user password and two real client
+      # shared secrets. They now hold synthetic values; this keeps it that way.
+      #
+      # This file is excluded from its own scan because it necessarily spells
+      # out the needles. The username is matched on a word boundary so the
+      # "serhatcamm" GitHub handle does not trip it.
+      - name: Fail on live credentials
+        run: |
+          set -euo pipefail
+          if grep -rEn --exclude-dir=.git --exclude=ci.yml \
+               '\bserhat\b|Radius123!|RadiusSecret123!|lab-lan-vlan-40|management-lan' . ; then
+            echo "::error::live credentials found in the tree"
+            exit 1
+          fi
+          echo "no live credentials committed"
+
+      # Fixtures use the RFC5737 documentation ranges (192.0.2.0/24,
+      # 198.51.100.0/24) so the repo publishes no real network layout.
+      - name: Fail on RFC1918 addresses
+        run: |
+          set -euo pipefail
+          if grep -rEn --exclude-dir=.git --exclude=ci.yml '192\.168\.' . ; then
+            echo "::error::RFC1918 address committed; use an RFC5737 range in fixtures"
+            exit 1
+          fi
+          echo "no RFC1918 addresses committed"
+
+      - name: Fail on private key material
+        run: |
+          set -euo pipefail
+          if grep -rEn --exclude-dir=.git 'BEGIN [A-Z ]*PRIVATE KEY' . ; then
+            echo "::error::private key material committed"
+            exit 1
+          fi
+          echo "no private key material committed"

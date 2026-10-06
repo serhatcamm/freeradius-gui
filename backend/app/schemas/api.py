@@ -1,0 +1,204 @@
+"""Pydantic request/response models for the API."""
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from ..services.clients import ClientValidationError, validate_address, validate_client_name
+from ..services.users import UserValidationError, validate_privilege, validate_username
+
+
+# -- auth --------------------------------------------------------------
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class AdministratorOut(BaseModel):
+    username: str
+    full_name: str | None = None
+    role: str
+    last_login_at: str | None = None
+
+
+class LoginResponse(BaseModel):
+    administrator: AdministratorOut
+    csrf_token: str
+    session_expires_in: int
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=1024)
+    new_password: str = Field(min_length=12, max_length=1024)
+
+
+# -- users -------------------------------------------------------------
+class UserCreate(BaseModel):
+    username: str
+    password: str = Field(min_length=1, max_length=1024)
+    cisco_privilege: int | None = 15
+    enabled: bool = True
+
+    @field_validator("username")
+    @classmethod
+    def _u(cls, v: str) -> str:
+        return validate_username(v)
+
+    @field_validator("cisco_privilege")
+    @classmethod
+    def _p(cls, v: int | None) -> int | None:
+        return validate_privilege(v)
+
+
+class UserUpdate(BaseModel):
+    password: str | None = Field(default=None, min_length=1, max_length=1024)
+    cisco_privilege: int | None = None
+    clear_cisco: bool = False
+
+    @field_validator("cisco_privilege")
+    @classmethod
+    def _p(cls, v: int | None) -> int | None:
+        return validate_privilege(v)
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    username: str
+    auth_method: str
+    enabled: bool
+    status: str
+    cisco_privilege: int | None
+    cisco_avpairs: list[str]
+    has_password: bool
+    rejects: bool
+    line_number: int
+    last_authentication: str | None = None
+    duplicate_entries: int | None = None
+
+
+# -- clients -----------------------------------------------------------
+class ClientCreate(BaseModel):
+    name: str
+    address: str
+    secret: str | None = None
+    nas_type: str = "other"
+    description: str = ""
+    ip_version: int = 4
+    require_message_authenticator: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def _n(cls, v: str) -> str:
+        return validate_client_name(v)
+
+    @model_validator(mode="after")
+    def _validate_ip(self) -> "ClientCreate":
+        # Validate against the *declared* family; a v6 client with an IPv4
+        # address would be rejected by FreeRADIUS at runtime otherwise.
+        validate_address(self.address, self.ip_version)
+        return self
+
+
+class ClientUpdate(BaseModel):
+    address: str | None = None
+    nas_type: str | None = None
+    description: str | None = None
+    ip_version: int = 4
+    require_message_authenticator: bool | None = None
+
+    @model_validator(mode="after")
+    def _validate_ip(self) -> "ClientUpdate":
+        if self.address is not None:
+            validate_address(self.address, self.ip_version)
+        return self
+
+
+class ClientOut(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    name: str
+    address: str | None
+    address_kind: str
+    has_secret: bool
+    nas_type: str
+    description: str
+    enabled: bool
+    status: str
+    require_message_authenticator: bool
+    line_number: int
+    generated_secret: str | None = None
+
+
+class SecretResponse(BaseModel):
+    """Returned only immediately after a create or reset."""
+
+    name: str
+    secret: str
+    warning: str = (
+        "This is the only time the secret is shown. Store it somewhere safe."
+    )
+
+
+# -- radius test -------------------------------------------------------
+class RadiusTestRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=63)
+    password: str = Field(min_length=1, max_length=1024)
+    server: str = Field(default="127.0.0.1", max_length=253)
+    port: int = Field(default=0, ge=0, le=65535)
+    secret: str = Field(min_length=1, max_length=128)
+    timeout: int = Field(default=15, ge=3, le=60)
+
+
+class RadiusTestResult(BaseModel):
+    result: str
+    response_time_ms: float
+    username: str
+    server: str
+    port: int
+    returned_attributes: list[dict[str, str]]
+    request_attributes: list[dict[str, str]]
+    message_authenticator: str | None
+    error: str | None
+
+
+# -- generic -----------------------------------------------------------
+class OkResponse(BaseModel):
+    ok: bool = True
+    message: str | None = None
+    detail: dict[str, Any] | None = None
+
+
+class ErrorResponse(BaseModel):
+    error: str
+    detail: str | None = None
+    rolled_back: bool | None = None
+    issues: list[dict[str, Any]] | None = None
+
+
+class ValidationOut(BaseModel):
+    ok: bool
+    returncode: int
+    issues: list[dict[str, Any]]
+    summary: str
+
+
+__all__ = [
+    "AdministratorOut",
+    "ChangePasswordRequest",
+    "ClientCreate",
+    "ClientOut",
+    "ClientUpdate",
+    "ErrorResponse",
+    "LoginRequest",
+    "LoginResponse",
+    "OkResponse",
+    "RadiusTestRequest",
+    "RadiusTestResult",
+    "SecretResponse",
+    "UserCreate",
+    "UserOut",
+    "UserUpdate",
+    "ValidationOut",
+]

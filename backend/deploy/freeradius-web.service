@@ -1,0 +1,75 @@
+[Unit]
+Description=FreeRADIUS web panel
+Documentation=file:///opt/freeradius-web/app/README.md
+After=network-online.target freeradius.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=freeradius-web
+Group=freeradius-web
+WorkingDirectory=/opt/freeradius-web/app
+
+# Settings live in one file written by install.sh. It is shared with the CLI on
+# purpose: `sudo` resets the environment, so passing FRW_* inline would give
+# the CLI different database and secret-key paths than the service and every
+# account it created would be invisible to the login endpoint.
+EnvironmentFile=/etc/freeradius-web/app.env
+Environment=PYTHONUNBUFFERED=1
+
+# The app runs as an unprivileged account and must never be able to write
+# /etc/freeradius itself: that only happens through the frw-write helper, which
+# is root-owned, has a fixed path allow-list, and is reached via a narrow sudoers
+# rule.
+#
+# NoNewPrivileges is deliberately NOT set. The helper and the systemctl calls
+# are reached with sudo, which is setuid root; NNP makes sudo refuse outright
+# ("prevents sudo from running as root"), breaking every privileged operation.
+# The security boundary is the sudoers rule plus the helper's own allow-list.
+#
+# ProtectSystem=strict plus ReadWritePaths below covers the directories the
+# helper must write into (the atomic replace needs a temp file and a rename in
+# the *directory*). Verified behaviour:
+#
+#   - an unprivileged write to /etc/freeradius/3.0 is denied by ordinary
+#     permission checks (freerad:freerad 0755, files 0640) - the service account
+#     has no write bit there, so widening the namespace does not grant it one;
+#   - inside an LXC container systemd's read-only remount is not enforced, so
+#     these ReadWritePaths are defence in depth rather than the only barrier.
+ProtectSystem=strict
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=no
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/var/lib/freeradius-web
+
+# Exactly the directories holding the four allow-listed helper targets.
+ReadWritePaths=/etc/freeradius/3.0
+ReadWritePaths=/etc/freeradius/3.0/mods-available
+ReadWritePaths=/etc/freeradius/3.0/mods-config/files
+ReadWritePaths=/etc/freeradius/3.0/sites-available
+
+ExecStart=/opt/freeradius-web/venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8080 \
+    --proxy-headers \
+    --forwarded-allow-ips 127.0.0.1 \
+    --workers 2 \
+    --timeout-graceful-shutdown 20
+
+Restart=on-failure
+RestartSec=3
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=freeradius-web
+
+[Install]
+WantedBy=multi-user.target

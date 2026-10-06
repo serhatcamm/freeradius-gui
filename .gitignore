@@ -1,0 +1,43 @@
+# --- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Node / frontend ------------------------------------------------------
+node_modules/
+dist/
+*.tsbuildinfo
+npm-debug.log*
+
+# --- Secrets and live state ----------------------------------------------
+# Never commit signing keys, TLS material, databases or the generated
+# cookie-signing secret. See backend/app/core/config.py for FRW_SECRET_KEY_FILE.
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secret_key
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Staged deploy bundles (built locally, copied to the host) ------------
+bundle/
+/frontend/bundle/
+
+# --- Editor / OS ----------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp

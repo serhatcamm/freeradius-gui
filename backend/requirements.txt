@@ -1,0 +1,13 @@
+# FreeRADIUS Web Management Panel - backend dependencies
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.4
+pydantic-settings==2.7.1
+SQLAlchemy==2.0.36
+alembic==1.14.0
+argon2-cffi==23.1.0
+psycopg[binary]==3.2.3          # only used when FRW_DATABASE_URL is PostgreSQL
+httpx==0.28.1
+pytest==8.3.4
+pytest-asyncio==0.25.0
