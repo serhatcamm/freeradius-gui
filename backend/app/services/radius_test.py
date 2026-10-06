@@ -46,7 +46,18 @@ def validate_host(host: str) -> str:
 
 
 def validate_port(port: int) -> int:
-    if not isinstance(port, int) or not (0 < port < 65536):
+    """Validate a port, allowing 0 as the "unspecified" sentinel.
+
+    0 is not an error: the caller then builds ``SERVER`` rather than
+    ``SERVER:PORT`` and lets radtest apply its own default. Range-checking 0
+    against 1-65535 rejected every request that relied on that default, which
+    is every request from the UI, since the form has no port field.
+    """
+    if isinstance(port, bool) or not isinstance(port, int):
+        raise RadiusTestError("Port must be between 1 and 65535")
+    if port == 0:
+        return 0
+    if not 1 <= port <= 65535:
         raise RadiusTestError("Port must be between 1 and 65535")
     return port
 
