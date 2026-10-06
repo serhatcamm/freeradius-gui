@@ -194,6 +194,38 @@ async def put_settings(
     return _out(db)
 
 
+@router.post("/test")
+async def test_connection(
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Administrator = Depends(require_role("admin")),
+) -> dict:
+    """Run read-only LDAP/winbind checks against the stored configuration.
+
+    This endpoint never writes FreeRADIUS files and never returns command
+    output or credentials. It is intentionally separate from Save/Enable so an
+    administrator can test a new domain before changing authentication.
+    """
+    settings = ad_store.load(db)
+    if settings is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Active Directory is not configured.")
+
+    result = await ad.test_connection(settings)
+    audit.record(
+        db,
+        audit.AD_CONNECTION_TESTED,
+        actor.username,
+        source_ip=client_ip(request),
+        object_type="active_directory",
+        object_id=settings.domain,
+        detail={
+            "ok": result.ok,
+            "checks": {check.name: check.status for check in result.checks},
+        },
+    )
+    return result.as_dict()
+
+
 def state_ready(db: Session) -> bool:
     """Whether every local prerequisite is currently satisfied.
 

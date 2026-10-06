@@ -63,6 +63,9 @@ ALLOWED_COMMANDS: dict[str, bool] = {
     "/usr/bin/ss": True,
     "/bin/ps": True,
     "/usr/bin/openssl": True,
+    "/usr/bin/ldapwhoami": True,
+    "/usr/bin/wbinfo": True,
+    "/usr/bin/net": True,
     "/usr/bin/readlink": True,
     "/usr/bin/stat": True,
     # privilege discovery

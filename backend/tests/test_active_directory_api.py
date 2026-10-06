@@ -100,6 +100,18 @@ def test_admin_can_store_settings_without_enabling(client, admin):
     assert body["bind_password_set"] is True
 
 
+def test_admin_can_run_a_read_only_connection_test(client, admin):
+    login(client, "admin", "Str0ngPassw0rd!")
+    put(client)
+    response = post(client, "/api/active-directory/test")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["ok"] is False
+    assert any(check["name"] == "ldap" or check["name"].startswith("ldap:") for check in body["checks"])
+    rows = client.get("/api/audit?limit=50").json()["entries"]
+    assert "AD_CONNECTION_TESTED" in {row["action"] for row in rows}
+
+
 def test_bind_password_is_never_returned(client, admin):
     login(client, "admin", "Str0ngPassw0rd!")
     put(client)

@@ -11,6 +11,7 @@ domain, no LDAP server and no privileges.
 """
 from __future__ import annotations
 
+import asyncio
 import re
 import shutil
 import subprocess
@@ -58,6 +59,27 @@ def settings(**overrides) -> ad.AdSettings:
     )
     base.update(overrides)
     return ad.AdSettings(**base)
+
+
+def test_connection_uses_sanitized_read_only_probes(monkeypatch):
+    calls = []
+
+    async def fake_run(argv, timeout=30):
+        calls.append(argv)
+        assert "Placeholder-Not-A-Real-Secret-1" not in argv
+        return runner.CommandResult(argv, 0, "uid=svc", "")
+
+    from app.freeradius import runner
+
+    monkeypatch.setattr(ad, "_tool", lambda path: path)
+    monkeypatch.setattr(runner, "run_command", fake_run)
+    result = asyncio.run(ad.test_connection(settings()))
+    assert result.ok is True
+    assert {check.name for check in result.checks} == {
+        "winbind",
+        "ldap:dc1.corp.example.com",
+    }
+    assert any("-y" in call for call in calls)
 
 
 @pytest.fixture

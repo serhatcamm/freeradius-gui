@@ -393,6 +393,11 @@ export interface ActiveDirectorySettingsInput {
   enable: boolean
 }
 
+export interface ActiveDirectoryConnectionTest {
+  ok: boolean
+  checks: Array<{ name: string; status: 'pass' | 'fail' | 'skipped'; detail: string }>
+}
+
 /** GET /api/audit returns {entries, count}, not a bare array. */
 export interface AuditList {
   entries: AuditEntry[]

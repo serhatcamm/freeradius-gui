@@ -31,12 +31,16 @@ operator can see what is missing before enabling.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
+import tempfile
+from dataclasses import asdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..freeradius import paths
+from ..freeradius import runner
 from .config_tx import ConfigTransaction
 
 logger = logging.getLogger(__name__)
@@ -216,6 +220,29 @@ class Status:
         return [p.name for p in self.prerequisites if not p.ok]
 
 
+@dataclass
+class ConnectionCheck:
+    """One sanitized result from the AD diagnostic."""
+
+    name: str
+    status: str
+    detail: str
+
+
+@dataclass
+class ConnectionTest:
+    """A complete, safe-to-return connectivity report."""
+
+    ok: bool
+    checks: list[ConnectionCheck]
+
+    def as_dict(self) -> dict:
+        return {
+            "ok": self.ok,
+            "checks": [asdict(check) for check in self.checks],
+        }
+
+
 def _quote(value: str) -> str:
     """Single-quote a value for a FreeRADIUS string literal."""
     return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
@@ -292,6 +319,124 @@ def probe() -> list[Prerequisite]:
             else "Run 'net ads join -U <administrator>' to join the domain.",
         ),
     ]
+
+
+def _tool(path: str) -> str | None:
+    """Return an allow-listed executable only when it exists."""
+    return path if Path(path).exists() else None
+
+
+async def test_connection(settings: AdSettings) -> ConnectionTest:
+    """Run read-only AD diagnostics without changing panel or RADIUS state.
+
+    The bind password is passed through a mode-0600 temporary file instead of
+    argv, because argv is visible to other users through ``ps`` while the
+    command is running. Command output is intentionally discarded: LDAP tools
+    can echo a distinguished name, server detail, or provider-specific error
+    that the UI does not need, and returning it would make secret redaction
+    depend on third-party output.
+    """
+    checks: list[ConnectionCheck] = []
+    try:
+        settings.validate()
+    except AdConfigError as exc:
+        return ConnectionTest(
+            ok=False,
+            checks=[ConnectionCheck("configuration", "fail", str(exc))],
+        )
+
+    if not settings.bind_password:
+        return ConnectionTest(
+            ok=False,
+            checks=[ConnectionCheck("configuration", "fail", "No bind password is stored.")],
+        )
+
+    wbinfo = _tool("/usr/bin/wbinfo")
+    if wbinfo is None:
+        checks.append(
+            ConnectionCheck("winbind", "skipped", "wbinfo is not installed on this host.")
+        )
+    else:
+        try:
+            result = await runner.run_command([wbinfo, "--ping-dc"], timeout=10)
+            checks.append(
+                ConnectionCheck(
+                    "winbind",
+                    "pass" if result.ok else "fail",
+                    "Domain controller reachable through winbind."
+                    if result.ok
+                    else "winbind could not reach the domain controller.",
+                )
+            )
+        except runner.CommandFailed:
+            checks.append(
+                ConnectionCheck("winbind", "fail", "winbind could not reach the domain controller.")
+            )
+        except runner.CommandNotAllowed:
+            checks.append(ConnectionCheck("winbind", "fail", "winbind probe is not permitted."))
+
+    ldapwhoami = _tool("/usr/bin/ldapwhoami")
+    if ldapwhoami is None:
+        checks.append(
+            ConnectionCheck("ldap", "skipped", "ldapwhoami is not installed on this host.")
+        )
+    else:
+        for server in settings.servers:
+            secret_path: str | None = None
+            try:
+                descriptor, secret_path = tempfile.mkstemp(prefix="frw-ad-bind-")
+                os.chmod(secret_path, 0o600)
+                with os.fdopen(descriptor, "w", encoding="utf-8") as secret_file:
+                    secret_file.write(settings.bind_password)
+
+                scheme = "ldaps" if settings.use_ldaps else "ldap"
+                uri = f"{scheme}://{server}:{settings.port}"
+                argv = [
+                    ldapwhoami,
+                    "-x",
+                    "-H",
+                    uri,
+                    "-D",
+                    settings.bind_dn,
+                    "-y",
+                    secret_path,
+                    "-o",
+                    "nettimeout=5",
+                ]
+                if settings.start_tls:
+                    argv.append("-ZZ")
+                result = await runner.run_command(argv, timeout=10)
+                checks.append(
+                    ConnectionCheck(
+                        f"ldap:{server}",
+                        "pass" if result.ok else "fail",
+                        "TLS connection and read-only bind succeeded."
+                        if result.ok
+                        else "TLS connection or read-only bind failed.",
+                    )
+                )
+            except runner.CommandFailed:
+                checks.append(
+                    ConnectionCheck(
+                        f"ldap:{server}",
+                        "fail",
+                        "TLS connection or read-only bind failed.",
+                    )
+                )
+            except runner.CommandNotAllowed:
+                checks.append(
+                    ConnectionCheck(f"ldap:{server}", "fail", "LDAP probe is not permitted.")
+                )
+            finally:
+                if secret_path:
+                    try:
+                        os.unlink(secret_path)
+                    except FileNotFoundError:
+                        pass
+
+    network_checks = [check for check in checks if check.name.startswith("ldap:")]
+    ok = bool(network_checks) and all(check.status == "pass" for check in network_checks)
+    return ConnectionTest(ok=ok, checks=checks)
 
 
 def ldap_block_installed() -> bool:

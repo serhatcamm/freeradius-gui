@@ -4,7 +4,7 @@ import type { FormEvent } from 'react'
 import { api } from '../api'
 import { ErrorBanner, Notice, Spinner } from '../components/ui'
 import { useAction, useAsync } from '../lib/hooks'
-import type { ActiveDirectorySettingsInput } from '../types'
+import type { ActiveDirectoryConnectionTest, ActiveDirectorySettingsInput } from '../types'
 
 type GroupRow = { ad: string; radius: string }
 
@@ -28,8 +28,10 @@ export function ActiveDirectoryPage() {
   const [form, setForm] = useState(emptyForm)
   const [groups, setGroups] = useState<GroupRow[]>([])
   const [notice, setNotice] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<ActiveDirectoryConnectionTest | null>(null)
   const save = useAction()
   const disconnect = useAction()
+  const connectionTest = useAction()
 
   useEffect(() => {
     const data = status.data
@@ -87,6 +89,12 @@ export function ActiveDirectoryPage() {
     }
   }
 
+  async function testConnection() {
+    setTestResult(null)
+    const result = await connectionTest.run(() => api.testActiveDirectory())
+    if (result) setTestResult(result)
+  }
+
   if (status.loading && !status.data) return <Spinner label="Loading Active Directory settings" />
   if (status.error && !status.data) return <ErrorBanner message={status.error} onRetry={() => void status.reload()} />
 
@@ -103,6 +111,7 @@ export function ActiveDirectoryPage() {
 
       {save.error ? <ErrorBanner message={save.error} /> : null}
       {disconnect.error ? <ErrorBanner message={disconnect.error} /> : null}
+      {connectionTest.error ? <ErrorBanner message={connectionTest.error} /> : null}
       {notice ? <Notice onDismiss={() => setNotice(null)}>{notice}</Notice> : null}
 
       {data ? (
@@ -161,8 +170,17 @@ export function ActiveDirectoryPage() {
 
         <div className="flex flex-wrap gap-3">
           <button type="submit" className="btn-primary" disabled={save.pending}>{save.pending ? 'Saving...' : 'Save settings'}</button>
+          <button type="button" className="btn-secondary" disabled={connectionTest.pending || !data?.configured} onClick={() => void testConnection()}>{connectionTest.pending ? 'Testing...' : 'Test connection'}</button>
           {data?.enabled ? <button type="button" className="btn-danger" disabled={disconnect.pending} onClick={() => void disconnectNow()}>{disconnect.pending ? 'Disconnecting...' : 'Disconnect AD'}</button> : null}
         </div>
+        {testResult ? (
+          <div className="rounded-md border border-slate-800 p-3 text-sm">
+            <div className={testResult.ok ? 'text-emerald-300' : 'text-amber-300'}>{testResult.ok ? 'Connection succeeded.' : 'Connection checks did not pass.'}</div>
+            <ul className="mt-2 space-y-1 text-xs text-slate-400">
+              {testResult.checks.map((check) => <li key={check.name}><span className={check.status === 'pass' ? 'text-emerald-300' : check.status === 'fail' ? 'text-red-300' : 'text-slate-500'}>{check.status}</span> {check.name}: {check.detail}</li>)}
+            </ul>
+          </div>
+        ) : null}
       </form>
     </div>
   )

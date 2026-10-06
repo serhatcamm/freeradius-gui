@@ -10,6 +10,7 @@
  */
 import type {
   ActiveDirectorySettings,
+  ActiveDirectoryConnectionTest,
   ActiveDirectorySettingsInput,
   Administrator,
   AdministratorCreate,
@@ -316,6 +317,8 @@ export const api = {
     request<{ ok: boolean; message?: string }>('/api/active-directory/disconnect', {
       method: 'POST',
     }),
+  testActiveDirectory: () =>
+    request<ActiveDirectoryConnectionTest>('/api/active-directory/test', { method: 'POST' }),
 }
 
 export type {
@@ -326,6 +329,7 @@ export type {
   AdministratorUpdate,
   ActiveDirectorySettings,
   ActiveDirectorySettingsInput,
+  ActiveDirectoryConnectionTest,
   Alert,
   AlertList,
   AlertMetric,
